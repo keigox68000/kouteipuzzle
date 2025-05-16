@@ -30,6 +30,10 @@ HTML＋JavaScriptで構成されており、ブラウザで簡単に動作しま
 - html2canvas（PNG画像出力用ライブラリ）
 - オンライン環境で動作（CDN依存）
 - GitHub Pages にて公開
+- 保存形式：ブラウザのローカルストレージ（`localStorage`）を利用しています。
+  - データは端末内に保存され、サーバーには送信されません。
+  - 同一ブラウザ上でのみ保存状態が維持されます。
+
 ※ Tailwind CSS および html2canvas はCDN経由で読み込まれており、ネット接続が必要です。
 
 ---
@@ -47,7 +51,7 @@ kouteipuzzle/
 ├── LICENSE                 # MITライセンス（再利用条件の明記）
 └── docs/                   # 説明用のスクリーンショットなど
     └── kouteipuzzle.png
-    
+
 ※ `index.html` は GitHub Pages のトップページとして使用されます（アプリ本体ではありません）。
 ```
 ---
