@@ -44,9 +44,10 @@ kouteipuzzle/
 │   └── ... 他の画像 ...
 ├── index.html              # トップページ（GitHub Pages 用）
 ├── README.md               # この説明ファイル
+├── LICENSE                 # MITライセンス（再利用条件の明記）
 └── docs/                   # 説明用のスクリーンショットなど
     └── kouteipuzzle.png
-
+    
 ※ `index.html` は GitHub Pages のトップページとして使用されます（アプリ本体ではありません）。
 ```
 ---
