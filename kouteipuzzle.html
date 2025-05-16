@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>製作工程表 パズルゲーム</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .tool-name-text-adjust {
+            position: relative;
+            top: -2px;
+        }
+        .process-name-cell {
+            vertical-align: middle;
+            text-align: center;
+            cursor: grab;
+            user-select: none;
+        }
+        .process-name-cell.is-dragging-block {
+            opacity: 0.7;
+            background-color: #bae6fd;
+        }
+        tr.process-block-drag-over-top {
+            box-shadow: inset 0 3px 0 0 #0ea5e9;
+        }
+        tr.process-block-drag-over-bottom {
+             box-shadow: inset 0 -3px 0 0 #0ea5e9;
+        }
+        .task-number-cell { vertical-align: middle; text-align: center; font-size: 0.875rem; }
+        .task-description-cell {
+            cursor: grab;
+            padding: 0.75rem;
+            background-color: #f3f4f6;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s;
+        }
+        .task-description-cell:hover { background-color: #e5e7eb; }
+        .task-description-cell.is-dragging-content { opacity: 0.5; background-color: #dbeafe; }
+        .task-description-cell.drag-over-content-target { outline: 2px dashed #2563eb; background-color: #eff6ff; }
+
+        .tools-drop-target-cell { vertical-align: top; }
+        .tool-item { cursor: grab; }
+        .tool-item:active { cursor: grabbing; }
+        .tools-drop-target-cell.drag-over { background-color: #fef9c3 !important; outline: 2px dashed #facc15; }
+        #messageBox { transition: opacity 0.5s ease-in-out; }
+        .tool-in-cell button { font-size: 0.7rem; padding: 0 0.2rem; line-height: 1; }
+        .tool-in-cell button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        #checkResult {
+            font-size: 1.2rem;
+            margin-left: 0.5rem;
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+        .correct-symbol { color: #16a34a; }
+        .incorrect-symbol { color: #dc2626; }
+        #subjectDisplay { cursor: pointer; background-color: #e0f2fe; padding: 0.5rem 0.5rem; border-radius: 0.375rem; transition: background-color 0.2s; }
+        #subjectDisplay:hover { background-color: #bae6fd; }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            text-align: center;
+        }
+        .modal-content p { margin-bottom: 1.5rem; }
+        .modal-content button { margin: 0 0.5rem; }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #printableArea.capturing-for-image .shadow,
+        #printableArea.capturing-for-image [class*=" shadow-"],
+        #printableArea.capturing-for-image [class~="shadow"] {
+            box-shadow: none !important;
+            --tw-shadow: 0 0 #0000 !important;
+            --tw-shadow-colored: 0 0 #0000 !important;
+        }
+
+        #printableArea {
+            background-color: white;
+        }
+        #studentName {
+            height: 2.5rem;
+            line-height: 2.5rem;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+        #successModalMessage {
+            font-size: 1.5rem;
+            line-height: 1.75rem;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-100">
+
+    <div class="container mx-auto p-4 md:p-6 lg:p-8">
+        <div id="printableArea">
+            <header class="mb-6 bg-white p-4 rounded-lg shadow">
+                <div class="flex justify-center items-center mb-2">
+                    <h1 class="text-3xl font-bold text-gray-800">製作工程表</h1>
+                    <button id="checkAnswerButton" class="ml-4 bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out text-sm">
+                        正解判定
+                    </button>
+                    <span id="checkResult" class="ml-2"></span>
+                </div>
+                <div class="flex flex-col sm:flex-row justify-between items-center mt-2 text-base text-gray-700">
+                    <span id="subjectDisplay" class="font-semibold">文庫本立て</span>
+                    <div>
+                        氏名: <input type="text" id="studentName" class="border border-gray-300 rounded px-2 py-2 text-base focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+            </header>
+
+            <div class="flex flex-col lg:flex-row gap-6">
+                <div class="flex-grow lg:w-3/4 bg-white p-4 rounded-lg shadow">
+                    <div class="overflow-x-auto">
+                        <table class="w-full border-collapse border border-gray-300">
+                            <thead class="bg-gray-200">
+                                <tr>
+                                    <th class="border border-gray-300 p-2 text-left text-sm font-semibold text-gray-700 w-[15%]">工程 (ここをドラッグで工程順変更)</th>
+                                    <th class="border border-gray-300 p-2 text-left text-sm font-semibold text-gray-700 w-[10%]">番号</th>
+                                    <th class="border border-gray-300 p-2 text-left text-sm font-semibold text-gray-700 w-[45%]">主な作業 (内容をドラッグで入替)</th>
+                                    <th class="border border-gray-300 p-2 text-left text-sm font-semibold text-gray-700 w-[30%]">使用する工具</th>
+                                </tr>
+                            </thead>
+                            <tbody id="process-table-body">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="tool-palette-container" class="lg:w-1/4 bg-white p-4 rounded-lg shadow">
+                    <h3 class="text-xl font-semibold text-gray-700 mb-3">工具一覧</h3>
+                    <div id="tools-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 gap-3"></div>
+                </div>
+            </div>
+        </div>
+        <footer class="mt-6 bg-white p-4 rounded-lg shadow flex flex-col sm:flex-row justify-center items-center gap-3">
+            <button id="saveButton" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out w-full sm:w-auto">手動保存</button>
+            <button id="resetButton" class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition duration-150 ease-in-out w-full sm:w-auto">リセット</button>
+        </footer>
+    </div>
+    <div id="messageBox" class="hidden fixed bottom-5 right-5 bg-green-600 text-white py-3 px-5 rounded-lg shadow-xl z-50"></div>
+
+    <div id="successModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <p id="successModalMessage"></p>
+            <button id="confirmPdfButton" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">はい</button>
+            <button id="cancelPdfButton" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded">いいえ</button>
+        </div>
+    </div>
+
+    <script>
+        const processDefinitions = [
+            { id: 'proc_kegaki', name: 'けがき', tasks: ['けがきの基準面を決める'.replace(/ /g, ''), '基準面を基準にして、材料に切断線や仕上がり寸法線を書く'.replace(/ /g, ''), '寸法どおりにけがかれているか検査する'.replace(/ /g, '')] },
+            { id: 'proc_setsudan', name: '切断', tasks: ['切断線や仕上がり寸法線に従って切断する'.replace(/ /g, ''), '材料が正しく取れたか検査する'.replace(/ /g, '')] },
+            { id: 'proc_buhinkakou', name: '部品加工', tasks: ['切断した部品の仕上がり寸法を確認する'.replace(/ /g, ''), '部品を削って仕上がり寸法に加工する'.replace(/ /g, ''), '部品加工の検査をする'.replace(/ /g, '')] },
+            { id: 'proc_kumitate', name: '組み立て', tasks: ['仮組をして仕上がりを確認する'.replace(/ /g, ''), '接合部のけがきをする'.replace(/ /g, ''), 'くぎの下穴の場所に印をつける'.replace(/ /g, ''), '下穴を開ける'.replace(/ /g, ''), 'くぎを使って接合する'.replace(/ /g, '')] },
+            { id: 'proc_shiage', name: '仕上げ', tasks: ['全体の仕上がりを検査する(直角、長さ)'.replace(/ /g, ''), '必要に応じてやすりで削る'.replace(/ /g, ''), '全体を紙やすりでみがく'.replace(/ /g, '')] }
+        ];
+        const availableTools = [
+            { id: 'tool_sashigane', name: 'さしがね', imageUrl: 'http://kerotech.s325.xrea.com/kouteipuzzle/images/sashigane.jpg' },
+            { id: 'tool_enpitsu', name: '鉛筆', imageUrl: 'http://kerotech.s325.xrea.com/kouteipuzzle/images/enpitsu.jpg' },
+            { id: 'tool_ryobanokogiri', name: '両刃のこぎり', imageUrl: 'http://kerotech.s325.xrea.com/kouteipuzzle/images/ryobanokogiri.jpg' },
+            { id: 'tool_clamp', name: 'クランプ', imageUrl: 'http://kerotech.s325.xrea.com/kouteipuzzle/images/clamp.jpg' },
+            { id: 'tool_nokoguide', name: 'のこガイド', imageUrl: 'http://kerotech.s325.xrea.com/kouteipuzzle/images/nokoguide.jpg' },
+            { id: 'tool_mokkouyasuri', name: '木工やすり', imageUrl: 'http://kerotech.s325.xrea.com/kouteipuzzle/images/mokkouyasuri.jpg' },
+            { id: 'tool_mokkouguide', name: '木工ガイド', imageUrl: 'http://kerotech.s325.xrea.com/kouteipuzzle/images/mokkouguide.jpg' },
+            { id: 'tool_gennou', name: 'げんのう', imageUrl: 'http://kerotech.s325.xrea.com/kouteipuzzle/images/gennou.jpg' },
+            { id: 'tool_drill', name: 'ドリル', imageUrl: 'http://kerotech.s325.xrea.com/kouteipuzzle/images/drill.jpg' },
+            { id: 'tool_kamiyasuri', name: '紙やすり', imageUrl: 'http://kerotech.s325.xrea.com/kouteipuzzle/images/kamiyasuri.jpg' },
+            { id: 'tool_kugi', name: 'くぎ', imageUrl: 'http://kerotech.s325.xrea.com/kouteipuzzle/images/kugi.jpg' }
+        ];
+
+        const correctProcessOrder = ['proc_kegaki', 'proc_setsudan', 'proc_buhinkakou', 'proc_kumitate', 'proc_shiage'];
+        let correctTaskOrderMapping = {};
+        const correctToolsForProcess = {
+            'proc_kegaki': ['さしがね', '鉛筆'],
+            'proc_setsudan': ['両刃のこぎり', 'クランプ', 'のこガイド'],
+            'proc_buhinkakou': ['さしがね', 'クランプ', '木工やすり'],
+            'proc_kumitate': ['げんのう', 'ドリル', 'くぎ', '木工ガイド'],
+            'proc_shiage': ['さしがね', '紙やすり']
+        };
+        const subjectOptions = ["文庫本立てA", "文庫本立てB", "本立て", "マガジンラック"];
+
+        let allTaskCards = [];
+        let orderedProcessStates = [];
+        let draggedProcessBlockInfo = null;
+        let draggedTaskContentInfo = null;
+        let draggedToolName = null;
+        let currentSubjectIndex = 0;
+        let isLocked = false;
+
+        const processTableBody = document.getElementById('process-table-body');
+        const toolsContainer = document.getElementById('tools-container');
+        const studentNameInput = document.getElementById('studentName');
+        const checkAnswerButton = document.getElementById('checkAnswerButton');
+        const checkResultSpan = document.getElementById('checkResult');
+        const subjectDisplay = document.getElementById('subjectDisplay');
+        const successModal = document.getElementById('successModal');
+        const successModalMessage = document.getElementById('successModalMessage');
+        const confirmPdfButton = document.getElementById('confirmPdfButton');
+        const cancelPdfButton = document.getElementById('cancelPdfButton');
+        const resetButton = document.getElementById('resetButton');
+        const toolPaletteContainer = document.getElementById('tool-palette-container');
+
+        function shuffleArray(array) {
+            const newArray = [...array];
+            for (let i = newArray.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+            }
+            return newArray;
+        }
+        function showTemporaryMessage(message, duration = 2500) {
+            const messageBox = document.getElementById('messageBox');
+            if (!messageBox) return;
+            messageBox.innerHTML = message;
+            messageBox.classList.remove('hidden', 'opacity-0');
+            messageBox.classList.add('opacity-100');
+            setTimeout(() => {
+                messageBox.classList.remove('opacity-100');
+                messageBox.classList.add('opacity-0');
+                setTimeout(() => messageBox.classList.add('hidden'), 500);
+            }, duration);
+        }
+        function populateCorrectTaskOrderMapping() {
+            correctTaskOrderMapping = {};
+            if (allTaskCards.length === 0) return;
+            processDefinitions.forEach(procDef => {
+                correctTaskOrderMapping[procDef.id] = procDef.tasks.map((_, taskIndex) => {
+                    const correctCard = allTaskCards.find(card => card.originalProcessId === procDef.id && card.originalTaskIndex === taskIndex);
+                    return correctCard ? correctCard.id : null;
+                }).filter(id => id !== null);
+            });
+        }
+
+        function setDragAndDropEnabled(enabled) {
+            const draggableCells = document.querySelectorAll('.process-name-cell, .task-description-cell');
+            draggableCells.forEach(cell => {
+                cell.setAttribute('draggable', enabled ? 'true' : 'false');
+                cell.style.cursor = enabled ? 'grab' : 'default';
+            });
+        }
+
+        function updateLockStateUI() {
+            if (isLocked) {
+                checkAnswerButton.textContent = 'ロック中';
+                checkAnswerButton.classList.remove('bg-green-500', 'hover:bg-green-600');
+                checkAnswerButton.classList.add('bg-red-500', 'hover:bg-red-700');
+                if (resetButton) resetButton.disabled = true;
+                setDragAndDropEnabled(false);
+            } else {
+                checkAnswerButton.textContent = '正解判定';
+                checkAnswerButton.classList.remove('bg-red-500', 'hover:bg-red-700');
+                checkAnswerButton.classList.add('bg-green-500', 'hover:bg-green-600');
+                if (resetButton) resetButton.disabled = false;
+                setDragAndDropEnabled(true);
+            }
+            renderProcessTable();
+        }
+
+        function renderProcessTable() {
+            if (!processTableBody) {
+                console.error("Error: processTableBody element not found!");
+                return;
+            }
+            processTableBody.innerHTML = '';
+            orderedProcessStates.forEach((pState, processBlockIndex) => {
+                const processDef = processDefinitions.find(pd => pd.id === pState.processDefId);
+                if (!processDef) {
+                    console.warn(`Process definition not found for id: ${pState.processDefId}`);
+                    return;
+                }
+                processDef.tasks.forEach((_, taskSlotIndex) => {
+                    const tr = processTableBody.insertRow();
+                    tr.dataset.processBlockIndex = processBlockIndex;
+                    if (taskSlotIndex === 0) {
+                        const processNameCell = tr.insertCell();
+                        processNameCell.textContent = processDef.name;
+                        processNameCell.classList.add('process-name-cell', 'border', 'border-gray-300', 'p-2', 'font-semibold', 'bg-gray-50');
+                        processNameCell.rowSpan = processDef.tasks.length;
+                        processNameCell.setAttribute('draggable', !isLocked);
+                        processNameCell.style.cursor = isLocked ? 'default' : 'grab';
+                        processNameCell.dataset.processBlockIndex = processBlockIndex;
+                        processNameCell.addEventListener('dragstart', handleProcessBlockDragStart);
+                        processNameCell.addEventListener('dragend', handleProcessBlockDragEnd);
+                    }
+                    const taskNumberCell = tr.insertCell();
+                    taskNumberCell.textContent = `(${taskSlotIndex + 1})`;
+                    taskNumberCell.classList.add('task-number-cell', 'border', 'border-gray-300', 'p-2');
+                    const taskDescCell = tr.insertCell();
+                    const displayedCardId = pState.displayedTaskCardIds[taskSlotIndex];
+                    const taskCard = allTaskCards.find(tc => tc.id === displayedCardId);
+                    taskDescCell.textContent = taskCard ? taskCard.description : 'エラー:カードなし';
+                    taskDescCell.classList.add('task-description-cell', 'border', 'border-gray-300');
+                    taskDescCell.setAttribute('draggable', !isLocked);
+                    taskDescCell.style.cursor = isLocked ? 'default' : 'grab';
+                    taskDescCell.dataset.processBlockIndex = processBlockIndex;
+                    taskDescCell.dataset.taskSlotIndex = taskSlotIndex;
+                    taskDescCell.addEventListener('dragstart', handleTaskContentDragStart);
+                    taskDescCell.addEventListener('dragend', handleTaskContentDragEnd);
+                    taskDescCell.addEventListener('dragover', handleTaskContentDragOver);
+                    taskDescCell.addEventListener('dragleave', handleTaskContentDragLeave);
+                    taskDescCell.addEventListener('drop', handleTaskContentDrop);
+                    if (taskSlotIndex === 0) {
+                        const toolsCell = tr.insertCell();
+                        toolsCell.classList.add('tools-drop-target-cell', 'border', 'border-gray-300', 'p-2', 'min-h-[60px]');
+                        toolsCell.rowSpan = processDef.tasks.length;
+                        toolsCell.dataset.processBlockIndex = processBlockIndex;
+                        renderToolsInCell(toolsCell, pState.userTools || [], processBlockIndex);
+                        toolsCell.addEventListener('dragover', handleToolDropTargetDragOver);
+                        toolsCell.addEventListener('dragleave', handleToolDropTargetDragLeave);
+                        toolsCell.addEventListener('drop', handleToolDropOnTarget);
+                    }
+                });
+            });
+            processTableBody.removeEventListener('dragover', handleProcessBlockDragOverTable);
+            processTableBody.addEventListener('dragover', handleProcessBlockDragOverTable);
+            processTableBody.removeEventListener('drop', handleProcessBlockDropOnTable);
+            processTableBody.addEventListener('drop', handleProcessBlockDropOnTable);
+            processTableBody.removeEventListener('dragleave', handleProcessBlockDragLeaveTable);
+            processTableBody.addEventListener('dragleave', handleProcessBlockDragLeaveTable);
+        }
+
+        function renderToolsInCell(cell, toolNames, processBlockIndex) {
+            cell.innerHTML = '';
+            if (!toolNames || toolNames.length === 0) {
+                cell.classList.add('empty-tools');
+                const placeholder = document.createElement('span');
+                placeholder.classList.add('placeholder-text', 'text-xs', 'text-gray-500');
+                placeholder.textContent = 'ここに工具をドラッグ';
+                cell.appendChild(placeholder);
+            } else {
+                cell.classList.remove('empty-tools');
+                const toolsListContainer = document.createElement('div');
+                toolsListContainer.classList.add('flex', 'flex-wrap', 'gap-1');
+                toolNames.forEach(toolName => {
+                    const toolTag = document.createElement('span');
+                    toolTag.classList.add('tool-in-cell', 'bg-blue-100', 'text-blue-700', 'text-xs', 'font-semibold', 'px-2', 'py-1', 'rounded-full', 'flex', 'items-center');
+                    const toolNameSpan = document.createElement('span');
+                    toolNameSpan.textContent = toolName;
+                    toolNameSpan.classList.add('tool-name-text-adjust');
+                    toolTag.appendChild(toolNameSpan);
+                    const removeBtn = document.createElement('button');
+                    removeBtn.innerHTML = '&times;';
+                    removeBtn.classList.add('ml-1.5', 'text-blue-700', 'hover:text-blue-900', 'font-bold', 'rounded-full', 'w-4', 'h-4', 'flex', 'items-center', 'justify-center', 'bg-blue-200', 'hover:bg-blue-300');
+                    removeBtn.disabled = isLocked;
+                    if (isLocked) removeBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                    else removeBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    removeBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        removeToolFromProcessBlock(processBlockIndex, toolName);
+                    };
+                    toolTag.appendChild(removeBtn);
+                    toolsListContainer.appendChild(toolTag);
+                });
+                cell.appendChild(toolsListContainer);
+            }
+        }
+
+        function removeToolFromProcessBlock(processBlockIndex, toolNameToRemove) {
+            if (isLocked) return;
+            const pState = orderedProcessStates[processBlockIndex];
+            if (pState && pState.userTools) {
+                const toolIndex = pState.userTools.indexOf(toolNameToRemove);
+                if (toolIndex > -1) {
+                    pState.userTools.splice(toolIndex, 1);
+                    renderProcessTable();
+                    saveGameState();
+                }
+            }
+        }
+
+        function renderToolPalette() {
+            if (!toolsContainer) {
+                console.error("Error: toolsContainer element not found!");
+                return;
+            }
+            toolsContainer.innerHTML = '';
+            availableTools.forEach(tool => {
+                const toolDiv = document.createElement('div');
+                toolDiv.classList.add('tool-item', 'p-2', 'border', 'border-gray-200', 'rounded-lg', 'bg-gray-50', 'shadow-sm', 'text-center', 'hover:shadow-md', 'transition-shadow', 'duration-150');
+                toolDiv.setAttribute('draggable', 'true');
+                toolDiv.dataset.toolName = tool.name;
+                const img = document.createElement('img');
+                img.src = tool.imageUrl;
+                img.alt = tool.name;
+                img.classList.add('w-30', 'h-30', 'mx-auto', 'mb-1', 'object-contain', 'pointer-events-none');
+                img.onerror = () => { img.src = `https://placehold.co/64x64/CCCCCC/4A5568?text=${tool.name.substring(0,2)}&font=sans`; img.alt = `${tool.name} (画像なし)`; };
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = tool.name;
+                nameSpan.classList.add('text-xs', 'block', 'text-gray-700', 'font-medium');
+                toolDiv.appendChild(img); toolDiv.appendChild(nameSpan);
+                toolDiv.addEventListener('dragstart', handleToolDragStartPalette);
+                toolDiv.addEventListener('dragend', handleToolDragEndPalette);
+                toolsContainer.appendChild(toolDiv);
+            });
+        }
+
+        function handleProcessBlockDragStart(event) {
+            if (isLocked || !event.target.classList.contains('process-name-cell')) return;
+            draggedProcessBlockInfo = { index: parseInt(event.target.dataset.processBlockIndex) };
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/x-process-block-index', draggedProcessBlockInfo.index);
+            event.target.classList.add('is-dragging-block');
+        }
+        function handleProcessBlockDragEnd(event) {
+            if (draggedProcessBlockInfo) {
+                const cell = document.querySelector(`.process-name-cell[data-process-block-index="${draggedProcessBlockInfo.index}"]`);
+                if (cell) cell.classList.remove('is-dragging-block');
+            }
+            document.querySelectorAll('tr[data-process-block-index]').forEach(row => {
+                row.classList.remove('process-block-drag-over-top', 'process-block-drag-over-bottom');
+            });
+            draggedProcessBlockInfo = null;
+        }
+        function handleProcessBlockDragOverTable(event) {
+            if (isLocked || !draggedProcessBlockInfo) return;
+            event.preventDefault();
+            const targetRow = event.target.closest('tr[data-process-block-index]');
+            document.querySelectorAll('tr[data-process-block-index]').forEach(r => {
+                 r.classList.remove('process-block-drag-over-top', 'process-block-drag-over-bottom');
+            });
+            if (targetRow) {
+                const targetBlockIndex = parseInt(targetRow.dataset.processBlockIndex);
+                if (targetBlockIndex === draggedProcessBlockInfo.index) return;
+                const firstRowOfTargetBlock = processTableBody.querySelector(`tr[data-process-block-index="${targetBlockIndex}"]`);
+                if (firstRowOfTargetBlock) {
+                    const rect = firstRowOfTargetBlock.getBoundingClientRect();
+                    if (event.clientY < rect.top + rect.height / 2) firstRowOfTargetBlock.classList.add('process-block-drag-over-top');
+                    else firstRowOfTargetBlock.classList.add('process-block-drag-over-bottom');
+                }
+            }
+        }
+         function handleProcessBlockDragLeaveTable(event) {
+            if (isLocked || !draggedProcessBlockInfo) return;
+            if (event.target === processTableBody || !processTableBody.contains(event.relatedTarget)) {
+                 document.querySelectorAll('tr[data-process-block-index]').forEach(r => {
+                    r.classList.remove('process-block-drag-over-top', 'process-block-drag-over-bottom');
+                });
+            }
+        }
+        function handleProcessBlockDropOnTable(event) {
+            event.preventDefault();
+            if (isLocked || !draggedProcessBlockInfo) return;
+            const targetRow = event.target.closest('tr[data-process-block-index]');
+            document.querySelectorAll('tr[data-process-block-index]').forEach(r => {
+                r.classList.remove('process-block-drag-over-top', 'process-block-drag-over-bottom');
+            });
+            if (targetRow) {
+                const sourceBlockIndex = draggedProcessBlockInfo.index;
+                let targetBlockIndex = parseInt(targetRow.dataset.processBlockIndex);
+                if (sourceBlockIndex !== targetBlockIndex) {
+                    const [draggedBlock] = orderedProcessStates.splice(sourceBlockIndex, 1);
+                    const adjustedTargetIndex = (sourceBlockIndex < targetBlockIndex) ? targetBlockIndex - 1 : targetBlockIndex;
+                    const firstRowOfTargetBlock = processTableBody.querySelector(`tr[data-process-block-index="${targetBlockIndex}"]`);
+                    let insertBefore = true;
+                    if (firstRowOfTargetBlock) {
+                        const rect = firstRowOfTargetBlock.getBoundingClientRect();
+                        if (event.clientY >= rect.top + rect.height / 2) insertBefore = false;
+                    }
+                    if (insertBefore) orderedProcessStates.splice(adjustedTargetIndex, 0, draggedBlock);
+                    else orderedProcessStates.splice(adjustedTargetIndex + 1, 0, draggedBlock);
+                    renderProcessTable();
+                    saveGameState();
+                }
+            }
+            draggedProcessBlockInfo = null;
+        }
+
+        function handleTaskContentDragStart(event) {
+            if (isLocked || !event.target.classList.contains('task-description-cell')) return;
+            const pBlockIndex = parseInt(event.target.dataset.processBlockIndex);
+            const tSlotIndex = parseInt(event.target.dataset.taskSlotIndex);
+            if (!orderedProcessStates[pBlockIndex] || !orderedProcessStates[pBlockIndex].displayedTaskCardIds) return;
+            draggedTaskContentInfo = {
+                processBlockIndex: pBlockIndex,
+                taskSlotIndex: tSlotIndex,
+                cardId: orderedProcessStates[pBlockIndex].displayedTaskCardIds[tSlotIndex]
+            };
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/x-task-card-info', JSON.stringify(draggedTaskContentInfo));
+            event.target.classList.add('is-dragging-content');
+        }
+        function handleTaskContentDragEnd(event) {
+            if (event.target.classList.contains('task-description-cell')) {
+                 event.target.classList.remove('is-dragging-content');
+            }
+            document.querySelectorAll('.task-description-cell').forEach(c => c.classList.remove('drag-over-content-target'));
+            draggedTaskContentInfo = null;
+        }
+        function handleTaskContentDragOver(event) {
+            if (isLocked || !draggedTaskContentInfo) return;
+            event.preventDefault();
+            if (event.target.classList.contains('task-description-cell')) {
+                const targetPBlockIndex = parseInt(event.target.dataset.processBlockIndex);
+                const targetTSlotIndex = parseInt(event.target.dataset.taskSlotIndex);
+                if (targetPBlockIndex !== draggedTaskContentInfo.processBlockIndex || targetTSlotIndex !== draggedTaskContentInfo.taskSlotIndex) {
+                    event.target.classList.add('drag-over-content-target');
+                }
+            }
+        }
+        function handleTaskContentDragLeave(event) {
+            if (isLocked || !draggedTaskContentInfo) return;
+            if (event.target.classList.contains('task-description-cell')) {
+                event.target.classList.remove('drag-over-content-target');
+            }
+        }
+        function handleTaskContentDrop(event) {
+            event.preventDefault();
+            if (isLocked || !draggedTaskContentInfo || !event.target.classList.contains('task-description-cell')) return;
+            event.target.classList.remove('drag-over-content-target');
+            const sourceInfo = draggedTaskContentInfo;
+            const targetPBlockIndex = parseInt(event.target.dataset.processBlockIndex);
+            const targetTSlotIndex = parseInt(event.target.dataset.taskSlotIndex);
+            if (sourceInfo.processBlockIndex === targetPBlockIndex && sourceInfo.taskSlotIndex === targetTSlotIndex) {
+                draggedTaskContentInfo = null;
+                return;
+            }
+             if (!orderedProcessStates[targetPBlockIndex] || !orderedProcessStates[targetPBlockIndex].displayedTaskCardIds ||
+                 !orderedProcessStates[sourceInfo.processBlockIndex] || !orderedProcessStates[sourceInfo.processBlockIndex].displayedTaskCardIds) {
+                 console.error("State error: displayedTaskCardIds not found for swap.");
+                 draggedTaskContentInfo = null;
+                 return;
+             }
+            const targetCardId = orderedProcessStates[targetPBlockIndex].displayedTaskCardIds[targetTSlotIndex];
+            orderedProcessStates[targetPBlockIndex].displayedTaskCardIds[targetTSlotIndex] = sourceInfo.cardId;
+            orderedProcessStates[sourceInfo.processBlockIndex].displayedTaskCardIds[sourceInfo.taskSlotIndex] = targetCardId;
+            renderProcessTable();
+            saveGameState();
+            draggedTaskContentInfo = null;
+        }
+
+        function handleToolDragStartPalette(event) {
+            draggedToolName = event.target.closest('.tool-item').dataset.toolName;
+            event.dataTransfer.setData('text/tool-name', draggedToolName);
+            event.dataTransfer.effectAllowed = 'copy';
+            event.target.closest('.tool-item').classList.add('opacity-50');
+        }
+        function handleToolDragEndPalette(event) {
+            const toolItem = event.target.closest('.tool-item');
+            if(toolItem) toolItem.classList.remove('opacity-50');
+            draggedToolName = null;
+        }
+        function handleToolDropTargetDragOver(event) {
+            if (isLocked || !draggedToolName) return;
+            event.preventDefault();
+            event.currentTarget.classList.add('drag-over');
+        }
+        function handleToolDropTargetDragLeave(event) {
+            if (isLocked) return;
+            event.currentTarget.classList.remove('drag-over');
+        }
+        function handleToolDropOnTarget(event) {
+            event.preventDefault();
+            if (isLocked || !draggedToolName) return;
+            event.currentTarget.classList.remove('drag-over');
+            const toolNameFromData = event.dataTransfer.getData('text/tool-name');
+             if (toolNameFromData !== draggedToolName) {
+                 console.warn("Tool name mismatch. Using: " + draggedToolName);
+            }
+            const targetProcessBlockIndex = parseInt(event.currentTarget.dataset.processBlockIndex);
+            const pState = orderedProcessStates[targetProcessBlockIndex];
+            if (pState) {
+                if (!pState.userTools) pState.userTools = [];
+                if (!pState.userTools.includes(draggedToolName)) {
+                    pState.userTools.push(draggedToolName);
+                }
+                renderProcessTable();
+                saveGameState();
+            }
+        }
+
+        function checkAnswer() {
+            if (isLocked) {
+                isLocked = false;
+                updateLockStateUI();
+                saveGameState();
+                checkResultSpan.innerHTML = '';
+                showTemporaryMessage("ロックを解除しました。再度編集できます。", 3000);
+                return;
+            }
+            if (studentNameInput && studentNameInput.value.trim() === "") {
+                showTemporaryMessage("氏名を入力してください。", 3000);
+                checkResultSpan.innerHTML = '';
+                return;
+            }
+            let processOrderCorrect = true;
+            if (orderedProcessStates.length !== correctProcessOrder.length) {
+                processOrderCorrect = false;
+            } else {
+                for (let i = 0; i < orderedProcessStates.length; i++) {
+                    if (orderedProcessStates[i].processDefId !== correctProcessOrder[i]) {
+                        processOrderCorrect = false;
+                        break;
+                    }
+                }
+            }
+            let tasksCorrect = true;
+            let taskFeedbackDetails = [];
+            if (processOrderCorrect) {
+                for (let i = 0; i < orderedProcessStates.length; i++) {
+                    const currentPState = orderedProcessStates[i];
+                    const processDef = processDefinitions.find(pd => pd.id === currentPState.processDefId);
+                    const correctTaskIds = correctTaskOrderMapping[currentPState.processDefId];
+                    if (!correctTaskIds || currentPState.displayedTaskCardIds.length !== correctTaskIds.length) {
+                        tasksCorrect = false;
+                        if (processDef) taskFeedbackDetails.push(`「${processDef.name}」の作業数`);
+                    } else {
+                        for (let j = 0; j < currentPState.displayedTaskCardIds.length; j++) {
+                            if (currentPState.displayedTaskCardIds[j] !== correctTaskIds[j]) {
+                                tasksCorrect = false;
+                                if (processDef) taskFeedbackDetails.push(`「${processDef.name}」の作業${j + 1}`);
+                            }
+                        }
+                    }
+                }
+            } else {
+                tasksCorrect = false;
+            }
+            let toolsCorrect = true;
+            let toolFeedbackDetails = [];
+            for (let i = 0; i < orderedProcessStates.length; i++) {
+                const currentPState = orderedProcessStates[i];
+                const correctToolsForThisProcess = correctToolsForProcess[currentPState.processDefId] || [];
+                const userToolsForThisProcess = currentPState.userTools || [];
+                const sortedUserTools = [...userToolsForThisProcess].sort();
+                const sortedCorrectTools = [...correctToolsForThisProcess].sort();
+                if (sortedUserTools.length !== sortedCorrectTools.length ||
+                    !sortedUserTools.every((tool, index) => tool === sortedCorrectTools[index])) {
+                    toolsCorrect = false;
+                    const processDef = processDefinitions.find(pd => pd.id === currentPState.processDefId);
+                    if (processDef) toolFeedbackDetails.push(`「${processDef.name}」`);
+                }
+            }
+            let resultHtml = '';
+            resultHtml += `<span class="mr-1 ${processOrderCorrect ? 'correct-symbol' : 'incorrect-symbol'}">${processOrderCorrect ? '⭕️' : '❌️'}</span>`;
+            resultHtml += `<span class="mr-1 ${tasksCorrect ? 'correct-symbol' : 'incorrect-symbol'}">${tasksCorrect ? '⭕️' : '❌️'}</span>`;
+            resultHtml += `<span class="${toolsCorrect ? 'correct-symbol' : 'incorrect-symbol'}">${toolsCorrect ? '⭕️' : '❌️'}</span>`;
+            checkResultSpan.innerHTML = resultHtml;
+
+            if (processOrderCorrect && tasksCorrect && toolsCorrect) {
+                const currentSubject = subjectDisplay ? subjectDisplay.textContent : "選択された作品";
+                successModalMessage.innerHTML = `あなたの製作する作品は<b>「${currentSubject}」</b>です。<br>製作工程表を固定してPNG画像に出力しますか？`;
+                successModal.classList.remove('hidden');
+            } else {
+                let errorMessages = [];
+                if (!processOrderCorrect) errorMessages.push("工程の順序");
+                if (!tasksCorrect) {
+                    if (taskFeedbackDetails.length > 0) errorMessages.push(`作業内容 (${taskFeedbackDetails.join('、 ')}が違います)`);
+                    else errorMessages.push("作業内容の配置");
+                }
+                if (!toolsCorrect) {
+                    if (toolFeedbackDetails.length > 0) errorMessages.push(`使用する工具 (${toolFeedbackDetails.join('、')}が違います)`);
+                    else errorMessages.push("使用する工具");
+                }
+                showTemporaryMessage("間違いがあります：<br>" + errorMessages.join('、<br>'), 7000);
+            }
+        }
+
+        function saveGameState() {
+            let currentStudentName = '';
+            if (studentNameInput) currentStudentName = studentNameInput.value;
+            const state = {
+                orderedProcessStates: orderedProcessStates,
+                allTaskCards: allTaskCards,
+                studentName: currentStudentName,
+                currentSubjectIndex: currentSubjectIndex,
+                isLocked: isLocked
+            };
+            try {
+                localStorage.setItem('techPuzzleState_v8', JSON.stringify(state));
+            } catch (e) {
+                console.error("ローカルストレージへの保存に失敗:", e);
+                showTemporaryMessage("エラー: 保存できませんでした。");
+            }
+        }
+
+        function loadGameState() {
+            const savedStateJSON = localStorage.getItem('techPuzzleState_v8');
+            if (savedStateJSON) {
+                try {
+                    const savedState = JSON.parse(savedStateJSON);
+                    if (savedState && Array.isArray(savedState.orderedProcessStates) && Array.isArray(savedState.allTaskCards) &&
+                        savedState.orderedProcessStates.every(ps => ps && ps.processDefId && Array.isArray(ps.displayedTaskCardIds))) {
+                        orderedProcessStates = savedState.orderedProcessStates.map(ps => ({ ...ps, userTools: ps.userTools || [] }));
+                        allTaskCards = savedState.allTaskCards;
+                        populateCorrectTaskOrderMapping();
+                        if (studentNameInput) studentNameInput.value = savedState.studentName || '';
+                        currentSubjectIndex = typeof savedState.currentSubjectIndex === 'number' ? savedState.currentSubjectIndex : 0;
+                        if(subjectDisplay) subjectDisplay.textContent = subjectOptions[currentSubjectIndex];
+                        isLocked = savedState.isLocked || false;
+                        updateLockStateUI();
+                        return;
+                    } else {
+                         console.warn("保存されたデータ形式(v8)が不正です。");
+                    }
+                } catch (e) { console.error("保存データ(v8)の読み込みエラー:", e); }
+            }
+            initializeNewGame();
+        }
+
+        function initializeNewGame() {
+            allTaskCards = [];
+            let taskCardIdCounter = 0;
+            processDefinitions.forEach(procDef => {
+                procDef.tasks.forEach((taskDesc, taskIndex) => {
+                    allTaskCards.push({
+                        id: `taskcard_${taskCardIdCounter++}`,
+                        description: taskDesc.replace(/ /g, ''),
+                        originalProcessId: procDef.id,
+                        originalTaskIndex: taskIndex
+                    });
+                });
+            });
+            populateCorrectTaskOrderMapping();
+            let globallyShuffledCardIds = shuffleArray(allTaskCards.map(tc => tc.id));
+            let cardIdPoolIndex = 0;
+            orderedProcessStates = processDefinitions.map(procDef => {
+                let displayedTaskCardIdsForBlock = [];
+                for (let i = 0; i < procDef.tasks.length; i++) {
+                    if (cardIdPoolIndex < globallyShuffledCardIds.length) {
+                        displayedTaskCardIdsForBlock.push(globallyShuffledCardIds[cardIdPoolIndex++]);
+                    } else {
+                        displayedTaskCardIdsForBlock.push(null); // Should not happen if logic is correct
+                    }
+                }
+                return {
+                    processDefId: procDef.id,
+                    displayedTaskCardIds: displayedTaskCardIdsForBlock,
+                    userTools: []
+                };
+            });
+            orderedProcessStates = shuffleArray(orderedProcessStates);
+            if (studentNameInput) studentNameInput.value = '';
+            if (checkResultSpan) checkResultSpan.innerHTML = '';
+            currentSubjectIndex = 0;
+            if(subjectDisplay) subjectDisplay.textContent = subjectOptions[currentSubjectIndex];
+            isLocked = false;
+            updateLockStateUI();
+        }
+
+        function renderAll() {
+            renderProcessTable();
+            renderToolPalette();
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const saveButton = document.getElementById('saveButton');
+            if (studentNameInput) studentNameInput.addEventListener('input', saveGameState);
+            if (resetButton) {
+                resetButton.addEventListener('click', () => {
+                    if (isLocked) return;
+                    if (confirm('現在の進捗をリセットして、初期状態に戻しますか？')) {
+                        localStorage.removeItem('techPuzzleState_v8');
+                        initializeNewGame();
+                        renderAll();
+                        saveGameState();
+                        showTemporaryMessage("ゲームをリセットしました。");
+                    }
+                });
+            }
+            if (saveButton) {
+                saveButton.addEventListener('click', () => {
+                    saveGameState();
+                    showTemporaryMessage("ゲームの状態を手動で保存しました！");
+                });
+            }
+            if (checkAnswerButton) checkAnswerButton.addEventListener('click', checkAnswer);
+
+            if (subjectDisplay) {
+                subjectDisplay.addEventListener('click', () => {
+                    if (isLocked) return;
+                    currentSubjectIndex = (currentSubjectIndex + 1) % subjectOptions.length;
+                    subjectDisplay.textContent = subjectOptions[currentSubjectIndex];
+                    saveGameState();
+                });
+            }
+            if (confirmPdfButton) {
+                confirmPdfButton.addEventListener('click', () => {
+                    isLocked = true;
+                    updateLockStateUI();
+                    saveGameState();
+                    successModal.classList.add('hidden');
+                    showTemporaryMessage("工程表がロックされました。「ロック中」ボタンで解除できます。", 3000);
+
+                    const elementToCapture = document.getElementById('printableArea');
+                    const toolPalette = document.getElementById('tool-palette-container');
+                    const originalToolPaletteDisplay = toolPalette ? toolPalette.style.display : undefined;
+
+                    if (elementToCapture && typeof html2canvas === 'function') {
+                        showTemporaryMessage("画像を生成中です...", 2000);
+                        if(toolPalette) toolPalette.style.display = 'none';
+                        elementToCapture.classList.add('capturing-for-image');
+
+                        html2canvas(elementToCapture, {
+                            useCORS: true,
+                            backgroundColor: '#ffffff',
+                            scale: 1,
+                            logging: true, // Keep logging for html2canvas for debugging if issues persist
+                            width: elementToCapture.scrollWidth,
+                            height: elementToCapture.scrollHeight,
+                            windowWidth: elementToCapture.scrollWidth,
+                            windowHeight: elementToCapture.scrollHeight
+                        }).then(originalCanvas => {
+                            const topMarginPx = 38; const bottomMarginPx = 38;
+                            const leftMarginPx = 38; const rightMarginPx = 0;
+                            const newCanvas = document.createElement('canvas');
+                            const newCtx = newCanvas.getContext('2d');
+                            newCanvas.width = originalCanvas.width + leftMarginPx + rightMarginPx;
+                            newCanvas.height = originalCanvas.height + topMarginPx + bottomMarginPx;
+                            newCtx.fillStyle = '#FFFFFF';
+                            newCtx.fillRect(0, 0, newCanvas.width, newCanvas.height);
+                            newCtx.drawImage(originalCanvas, leftMarginPx, topMarginPx);
+                            const imgData = newCanvas.toDataURL('image/png');
+                            const studentName = studentNameInput.value.trim() || "名無し";
+                            const subjectName = subjectDisplay.textContent || "作品";
+                            const filename = `製作工程表_${studentName}_${subjectName}.png`;
+                            const link = document.createElement('a');
+                            link.href = imgData;
+                            link.download = filename;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            showTemporaryMessage("PNG画像がダウンロードされます。", 3000);
+                        }).catch(err => {
+                            console.error("画像生成エラー (html2canvas): ", err);
+                            showTemporaryMessage("画像の生成に失敗しました。コンソールで詳細を確認してください。エラー: " + String(err), 5000);
+                        }).finally(() => {
+                            elementToCapture.classList.remove('capturing-for-image');
+                            if(toolPalette && originalToolPaletteDisplay !== undefined) {
+                                toolPalette.style.display = originalToolPaletteDisplay;
+                            }
+                        });
+                    } else {
+                        if(toolPalette && originalToolPaletteDisplay !== undefined) {
+                             toolPalette.style.display = originalToolPaletteDisplay;
+                        }
+                        showTemporaryMessage("画像化する要素が見つからないか、ライブラリが読み込まれていません。", 3000);
+                        console.error("画像化要素またはライブラリが見つかりません。html2canvas:", typeof html2canvas);
+                    }
+                });
+            }
+            if (cancelPdfButton) {
+                cancelPdfButton.addEventListener('click', () => {
+                    successModal.classList.add('hidden');
+                });
+            }
+            loadGameState();
+            renderAll();
+        });
+    </script>
+</body>
+</html>
