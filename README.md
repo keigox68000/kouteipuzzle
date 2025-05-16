@@ -3,7 +3,7 @@
 中学校技術科の授業で活用できる、製作工程表を**パズルのように組み立てるWebアプリ**です。  
 HTML＋JavaScriptで構成されており、ブラウザで簡単に動作します。
 
-![screenshot](images/screenshot.png) <!-- 任意でスクショがあればここに置けます -->
+![screenshot](docs/screenshot.png) <!-- 任意でスクショがあればここに置けます -->
 
 ---
 
@@ -25,9 +25,12 @@ HTML＋JavaScriptで構成されており、ブラウザで簡単に動作しま
 
 ## 🛠️ 技術構成
 
-- HTML / CSS / JavaScript（フレームワーク不使用）
-- オフライン動作可能（サーバー不要）
+- HTML / CSS / JavaScript（**フレームワーク未使用**）
+- Tailwind CSS（CDN）
+- html2canvas（PNG画像出力用ライブラリ）
+- オンライン環境で動作（CDN依存）
 - GitHub Pages にて公開
+※ Tailwind CSS および html2canvas はCDN経由で読み込まれており、ネット接続が必要です。
 
 ---
 
