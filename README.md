@@ -33,7 +33,7 @@ HTML＋JavaScriptで構成されており、ブラウザで簡単に動作しま
 ※ Tailwind CSS および html2canvas はCDN経由で読み込まれており、ネット接続が必要です。
 
 ---
-
+```
 ## 📁 ファイル構成
 
 kouteipuzzle/
@@ -48,3 +48,4 @@ kouteipuzzle/
     └── kouteipuzzle.png
 
 ※ `index.html` は GitHub Pages のトップページとして使用されます（アプリ本体ではありません）。
+```
