@@ -36,3 +36,15 @@ HTML＋JavaScriptで構成されており、ブラウザで簡単に動作しま
 
 ## 📁 ファイル構成
 
+kouteipuzzle/
+├── kouteipuzzle.html       # メインアプリ（工程パズル）
+├── images/                 # アプリ内で使用する画像（工具など）
+│   ├── sashigane.jpg
+│   ├── enpitsu.jpg
+│   └── ... 他の画像 ...
+├── index.html              # トップページ（GitHub Pages 用）
+├── README.md               # この説明ファイル
+└── docs/                   # 説明用のスクリーンショットなど
+    └── kouteipuzzle.png
+
+※ `index.html` は GitHub Pages のトップページとして使用されます（アプリ本体ではありません）。
