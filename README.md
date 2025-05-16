@@ -3,7 +3,7 @@
 中学校技術科の授業で活用できる、製作工程表を**パズルのように組み立てるWebアプリ**です。  
 HTML＋JavaScriptで構成されており、ブラウザで簡単に動作します。
 
-![screenshot](docs/screenshot.png) <!-- 任意でスクショがあればここに置けます -->
+![screenshot](docs/kouteipuzzle.png) <!-- 任意でスクショがあればここに置けます -->
 
 ---
 
